@@ -103,7 +103,6 @@ class Visualizer:
 
                     self.output_text.config(state="normal")
                     self.output_text.insert("end", "Model Generation:\n", "title")
-                    self.output_text.insert("end")
                     self.output_text.config(state="disabled")
                     self.output_text.see("end")
 
@@ -127,7 +126,6 @@ class Visualizer:
                     self.output_text.config(state="normal")
                     self.output_text.insert("end", f"\n[ERROR: {error_msg}]\n", "error")
                     self.output_text.insert("end", "\nModel Generation:\n", "title")
-                    self.output_text.insert("end")
                     self.output_text.config(state="disabled")
                     self.output_text.see("end")
 

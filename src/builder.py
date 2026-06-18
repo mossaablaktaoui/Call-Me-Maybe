@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict
 import json
 
 from src.file_manager import FileManager
@@ -33,7 +33,7 @@ class Builder:
         self.file_manager.write_output(results)
         self.visualizer.notify_complete()
 
-    def build_prompt(self, prompt: str) -> dict[str, Any]:
+    def build_prompt(self, prompt: str) -> Dict[str, Any]:
         function_name = self.generate_function_name(prompt)
         parameters = self.generate_function_parameters(prompt, function_name)
 
@@ -66,7 +66,7 @@ class Builder:
         return result.strip()
 
     def generate_function_parameters(self, prompt: str,
-                                     function_name: str,) -> dict[str, Any]:
+                                     function_name: str,) -> Dict[str, Any]:
 
         params_def = self.file_manager.get_function_parameters(function_name)
 
@@ -89,25 +89,21 @@ class Builder:
     def generate_one_parameter_value(self, prompt: str, function_name: str,
                                      param_name: str, param_type: str,) -> Any:
 
-        param_prompt = self.get_param_prompt(
-            function_name=function_name,
-            param_name=param_name,
-            param_type=param_type,
-            prompt=prompt,
-        )
+        param_prompt = self.get_param_prompt(function_name, param_name,
+                                             param_type, prompt)
 
         prompt_tokens_ids = list(self.model.encode(param_prompt)[0])
         result = ""
 
-        while True:
+        while self.decoder.value_is_finished(result):
             logits = self.model.get_logits_from_input_ids(prompt_tokens_ids)
             masked_logits = self.decoder.mask_parameter_value_logits(
-                logits=logits,
-                current_text=result,
-                param_type=param_type,
-            )
+                                            logits, result, param_type)
 
-            next_token_id = self.choose_next_token(masked_logits)
+            if max(logits) == float("-inf"):
+                raise runtimeerror("no valid token available after masking.")
+
+            next_token_id = logits.index(max(logits))
             prompt_tokens_ids.append(next_token_id)
 
             next_token = self.model.decode([next_token_id])
@@ -115,19 +111,10 @@ class Builder:
 
             self.visualizer.notify_new_token(next_token)
 
-            if self.decoder.value_is_finished(result):
-                clean_value = self.decoder.clean_end_token(result)
-                return self.cast_parameter_value(clean_value, param_type)
-
-    def choose_next_token(self, logits: list[float]) -> int:
-        if max(logits) == float("-inf"):
-            raise RuntimeError("No valid token available after masking.")
-
-        return logits.index(max(logits))
+            clean_value = text.split(self.end_token)[0].strip()
+            return self.cast_parameter_value(clean_value, param_type)
 
     def cast_parameter_value(self, value: str, param_type: str) -> Any:
-
-        value = value.strip()
 
         if param_type in {"int", "integer"}:
             return int(value)
@@ -137,7 +124,6 @@ class Builder:
 
         if param_type in {"bool", "boolean"}:
             return value.lower() in {"true", "yes", "1"}
-
         return value
 
     def get_name_prompt(self, func_def: str, prompt: str) -> str:

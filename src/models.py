@@ -8,7 +8,7 @@ class FunctionDefinition(BaseModel):
     name: str
     description: str | None = None
     parameters: dict[str, Any]
-    returns: Any | None = None
+    returns: dict[str, Any]
 
     @model_validator(mode="before")
     @classmethod
@@ -24,7 +24,12 @@ class FunctionDefinition(BaseModel):
         if not isinstance(data["parameters"], dict):
             raise ValueError(
                 "Error in functions definition file:\n"
-                "Function parameters must be a dictionary")
+                "Function's parameters must be a dictionary")
+
+        if not isinstance(data["returns"], dict):
+            raise ValueError(
+                "Error in functions definition file:\n"
+                "Function's returns must be a string")
         return data
 
 
