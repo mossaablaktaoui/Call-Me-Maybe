@@ -16,10 +16,12 @@ class FileManager():
     def load_functions(self):
         try:
             with open(self.functions_definition, "r") as file:
-                return json.load(file)
+                data = json.load(file)
 
             if not isinstance(data, list):
                 raise ValueError("Input JSON must be a list.")
+
+            return data
 
         except FileNotFoundError:
             raise FileNotFoundError("Missing functions file.")

@@ -34,76 +34,37 @@ class Builder:
         self.visualizer.notify_complete()
 
     def build_prompt(self, prompt: str) -> Dict[str, Any]:
-        function_name = self.generate_function_name(prompt)
-        parameters = self.generate_function_parameters(prompt, function_name)
-
-        return {"prompt": prompt,
-                "name": function_name,
-                "parameters": parameters}
-
-    def generate_function_name(self, prompt: str) -> str:
-
         func_def = self.file_manager.get_functions_definition()
         name_prompt = self.get_name_prompt(func_def, prompt)
-
-        prompt_tokens_ids = list(self.model.encode(name_prompt)[0])
-
-        result = ""
-
-        while self.decoder.is_complete_function_name(result):
-            logits = self.model.get_logits_from_input_ids(prompt_tokens_ids)
-            masked_logits = self.decoder.mask_function_name_logits(logits,
-                                                                   result)
-
-            next_token_id = self.choose_next_token(masked_logits)
-            prompt_tokens_ids.append(next_token_id)
-
-            next_token = self.model.decode([next_token_id])
-            result += next_token
-
-            self.visualizer.notify_new_token(next_token)
-
-        return result.strip()
-
-    def generate_function_parameters(self, prompt: str,
-                                     function_name: str,) -> Dict[str, Any]:
+        function_name = self.generate_text(name_prompt)
 
         params_def = self.file_manager.get_function_parameters(function_name)
-
         parameters = {}
 
         for param_name, param_data in params_def.items():
             param_type = param_data["type"]
 
-            value = self.generate_one_parameter_value(
-                prompt=prompt,
-                function_name=function_name,
-                param_name=param_name,
-                param_type=param_type,
-            )
+            param_prompt = self.get_param_prompt(function_name, param_name,
+                                                 param_type, prompt, parameters)
+            print(param_prompt)
 
+            value = self.generate_text(param_prompt, param_type)
             parameters[param_name] = value
 
-        return parameters
 
-    def generate_one_parameter_value(self, prompt: str, function_name: str,
-                                     param_name: str, param_type: str,) -> Any:
+        return {"prompt": prompt,
+                "name": function_name,
+                "parameters": parameters}
 
-        param_prompt = self.get_param_prompt(function_name, param_name,
-                                             param_type, prompt)
+    def generate_text(self, prompt: str, param_type: str | None = None) -> str:
 
-        prompt_tokens_ids = list(self.model.encode(param_prompt)[0])
+        prompt_tokens_ids = list(self.model.encode(prompt)[0])
         result = ""
 
-        while self.decoder.value_is_finished(result):
+        while True:
             logits = self.model.get_logits_from_input_ids(prompt_tokens_ids)
-            masked_logits = self.decoder.mask_parameter_value_logits(
-                                            logits, result, param_type)
+            next_token_id = self.decoder.get_next_token_id(logits, param_type)
 
-            if max(logits) == float("-inf"):
-                raise runtimeerror("no valid token available after masking.")
-
-            next_token_id = logits.index(max(logits))
             prompt_tokens_ids.append(next_token_id)
 
             next_token = self.model.decode([next_token_id])
@@ -111,18 +72,24 @@ class Builder:
 
             self.visualizer.notify_new_token(next_token)
 
-            clean_value = text.split(self.end_token)[0].strip()
-            return self.cast_parameter_value(clean_value, param_type)
+            if self.decoder.is_complete(result, param_type):
+                if param_type is None:
+                    self.visualizer.notify_new_token("\n")
+                break
+
+        result = self.cast_parameter_value(result, param_type)
+        return result
 
     def cast_parameter_value(self, value: str, param_type: str) -> Any:
 
+        value = value.strip()
         if param_type in {"int", "integer"}:
             return int(value)
 
-        if param_type in {"float", "number"}:
+        elif param_type in {"float", "number"}:
             return float(value)
 
-        if param_type in {"bool", "boolean"}:
+        elif param_type in {"bool", "boolean"}:
             return value.lower() in {"true", "yes", "1"}
         return value
 
@@ -131,9 +98,6 @@ class Builder:
         return f"""Functions:
 {func_def}
 
-Choose function.
-Output function_name only.
-
 User:
 {prompt}
 
@@ -141,18 +105,21 @@ Answer:
 """
 
     def get_param_prompt(self, function_name: str, param_name: str,
-                         param_type: str, prompt: str,) -> str:
+                         param_type: str, prompt: str,
+                         parameters: dict[str, Any],) -> str:
+        
+        # Build context of already extracted parameters WITHOUT quotes.
+        # If we use quotes here, the model will output quotes for the next param.
+        params_context = ""
+        if parameters:
+            for k, v in parameters.items():
+                params_context += f"{k}={v}, "
+        
+        # A hard, direct constraint placed immediately before the completion
+        constraint = f"Output ONLY the raw {param_type} for {param_name}. No quotes, no commas, no parentheses. Stop immediately."
+        
+        return f"""User Request: {prompt}
+{constraint}
 
-        return f"""Function:
-{function_name}
+{function_name}({params_context}{param_name}="""
 
-Extract:
-{param_name}:{param_type}
-
-Output value only. then newline.
-
-User:
-{prompt}
-
-Value:
-"""

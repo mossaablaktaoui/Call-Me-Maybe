@@ -3,70 +3,86 @@ class Decoder:
         self.file_manager = file_manager
         self.model = model
 
-        self.allowed_function_names = self.file_manager.get_function_names()
+        self.func_names = self.file_manager.get_function_names()
+        self.func_names_token_ids = self.get_function_name_token_ids()
+        self.number_token_ids = self.get_number_token_ids()
+        self.bool_token_ids = self.get_bool_token_ids()
+        self.string_token_ids = self.get_string_token_ids()
 
-    def mask_function_name_logits(self, logits: list[float],
-                                  current_text: str,) -> list[float]:
+    def get_function_name_token_ids(self) -> set[int]:
+        allowed_tokens = set()
 
-        for token_id in range(len(logits)):
-            token = self.model.decode([token_id])
-            result = current_text + token.strip()
+        for func_name in self.func_names:
+            token_ids = self.model.encode(func_name)[0]
 
-            if not any(function_name.startswith(text)
-                       for function_name in self.allowed_function_names):
-                logits[token_id] = float("-inf")
+            for token_id in token_ids:
+                allowed_tokens.add(int(token_id))
 
-        return logits
+        return allowed_tokens
 
-    def mask_parameter_value_logits(self, logits: list[float],
-                                    current_text: str,
-                                    param_type: str,) -> list[float]:
+    def get_number_token_ids(self) -> set[int]:
+        allowed_tokens = set()
 
-        param_type = param_type.lower().strip()
+        pieces = "0123456789-.\n"
+        for piece in pieces:
+            for token_id in self.model.encode(piece)[0]:
+                allowed_tokens.add(int(token_id))
+
+        return allowed_tokens
+
+    def get_bool_token_ids(self) -> set[int]:
+        allowed_tokens = set()
+
+        pieces = ["true", "false",
+                  "yes", "no",
+                  "1", "0", "\n"]
+
+        for piece in pieces:
+            for token_id in self.model.encode(piece)[0]:
+                allowed_tokens.add(token_id)
+
+        return allowed_tokens
+
+    def get_string_token_ids(self) -> set[int]:
+        allowed = set()
+
+        for c in "".join(chr(i) for i in range(32, 127)) + "\n":
+            for tid in self.model.encode(c)[0]:
+                allowed.add(int(tid))
+        return allowed
+
+    def get_next_token_id(self, logits: list[float],
+                    param_type: str | None = None) -> list[float]:
+
+        allowed_tokens = set()
 
         if param_type in {"int", "integer", "float", "number"}:
-            return self.keep_number(logits)
+            allowed_tokens = self.number_token_ids
 
-        if param_type in {"bool", "boolean"}:
-            return self.keep_bool(logits, current_text)
+        elif param_type in {"bool", "boolean"}:
+            allowed_tokens = self.bool_token_ids
 
-        return logits
+        elif param_type in {"string", "str"}:
+            allowed_tokens = self.string_token_ids
 
-    def is_complete_function_name(self, text: str) -> bool:
+        elif param_type is None:
+            allowed_tokens = self.func_names_token_ids
+
+        else:
+            next_token_id = logits.index(max(logits))
+            return next_token_id
+
+        masked_logits = [float("-inf")] * len(logits)
+
+        for token_id in allowed_tokens:
+            masked_logits[token_id] = logits[token_id]
+
+        next_token_id = masked_logits.index(max(masked_logits))
+        return next_token_id
+
+    def is_complete(self, text, param_type):
+        if param_type:
+            return "\n" in text
         text = text.strip()
-        return text in self.allowed_function_names
-
-    def value_is_finished(self, text: str) -> bool:
-        return "\n" in text
-
-    def keep_number(self, logits: list[float]) -> list[float]:
-        allowed_chars = "0123456789.-"
-
-        for token_id in range(len(logits)):
-            token = self.model.decode([token_id])
-
-            if "\n" in token:
-                continue
-
-            if not all(char in allowed_chars for char in token):
-                logits[token_id] = float("-inf")
-
-        return logits
-
-    def keep_bool(self, logits: list[float],
-                  current_text: str,) -> list[float]:
-
-        allowed_values = ["true", "false", "1", "0", "yes", "no"]
-        current_text = current_text.strip().lower()
-
-        for token_id in range(len(logits)):
-            token = self.model.decode([token_id])
-            result = current_text + token.lower().strip()
-
-            if "\n" in token:
-                continue
-
-            if not any(value.startswith(result) for value in allowed_values):
-                logits[token_id] = float("-inf")
-
-        return logits
+        matches = [f for f in self.func_names if f.startswith(text)]
+        return len(matches) == 1 and matches[0] == text
