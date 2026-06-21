@@ -1,29 +1,31 @@
-from typing import Any, Dict
 import json
+from typing import Any, Dict
 
-from src.file_manager import FileManager
-from src.visualizer import Visualizer
 from src.decoder import Decoder
-from llm_sdk import Small_LLM_Model
+from src.file_manager import FileManager
+from src.LLM_model import LLM_Model
+from src.visualterm import Visualizer
 
 
 class Builder:
-    def __init__(self):
+    def __init__(self) -> None:
         self.file_manager = FileManager()
-        self.model = Small_LLM_Model()
+        self.model = LLM_Model(self.file_manager.model_name)
         self.visualizer = Visualizer()
         self.decoder = Decoder(
-                        file_manager=self.file_manager,
-                        model=self.model)
+            file_manager=self.file_manager,
+            model=self.model,
+        )
 
-        self.visualizer.run(self.build)
+        self.visualizer.run()
+        self.build()
 
-    def build(self):
-        results = []
+    def build(self) -> None:
+        results: list[dict[str, Any]] = []
         prompts = self.file_manager.get_prompts()
 
-        for i, prompt in enumerate(prompts):
-            self.visualizer.notify_new_prompt(prompt, i + 1, len(prompts))
+        for index, prompt in enumerate(prompts):
+            self.visualizer.notify_new_prompt(prompt, index + 1, len(prompts))
 
             result = self.build_prompt(prompt)
             results.append(result)
@@ -39,34 +41,45 @@ class Builder:
         function_name = self.generate_text(name_prompt)
 
         params_def = self.file_manager.get_function_parameters(function_name)
-        parameters = {}
+        parameters: dict[str, Any] = {}
 
         for param_name, param_data in params_def.items():
             param_type = param_data["type"]
 
-            param_prompt = self.get_param_prompt(function_name, param_name,
-                                                 param_type, prompt, parameters)
-            print(param_prompt)
+            param_prompt = self.get_param_prompt(
+                func_def,
+                function_name,
+                param_name,
+                param_type,
+                prompt,
+                parameters,
+            )
 
             value = self.generate_text(param_prompt, param_type)
             parameters[param_name] = value
 
+        return {
+            "prompt": prompt,
+            "name": function_name,
+            "parameters": parameters,
+        }
 
-        return {"prompt": prompt,
-                "name": function_name,
-                "parameters": parameters}
-
-    def generate_text(self, prompt: str, param_type: str | None = None) -> str:
-
-        prompt_tokens_ids = list(self.model.encode(prompt)[0])
+    def generate_text(self, prompt: str, param_type: str | None = None) -> Any:
+        prompt_tokens_ids = self.model.encode(prompt)
         result = ""
 
+        loop = 0
         while True:
             logits = self.model.get_logits_from_input_ids(prompt_tokens_ids)
-            next_token_id = self.decoder.get_next_token_id(logits, param_type)
+            next_token_id = self.decoder.get_next_token_id(
+                logits,
+                param_type,
+                loop,
+            )
+
+            loop += 1
 
             prompt_tokens_ids.append(next_token_id)
-
             next_token = self.model.decode([next_token_id])
             result += next_token
 
@@ -77,24 +90,27 @@ class Builder:
                     self.visualizer.notify_new_token("\n")
                 break
 
-        result = self.cast_parameter_value(result, param_type)
-        return result
+        return self.cast_parameter_value(result, param_type)
 
-    def cast_parameter_value(self, value: str, param_type: str) -> Any:
-
+    def cast_parameter_value(self, value: str,
+                             param_type: str | None,) -> Any:
         value = value.strip()
-        if param_type in {"int", "integer"}:
-            return int(value)
 
-        elif param_type in {"float", "number"}:
+        if param_type in {"int", "integer"}:
+            return int(float(value))
+
+        if param_type in {"float", "number"}:
             return float(value)
 
-        elif param_type in {"bool", "boolean"}:
+        if param_type in {"bool", "boolean"}:
             return value.lower() in {"true", "yes", "1"}
+
+        if param_type in {"string", "str"}:
+            return self.decoder.get_string_value(value)
+
         return value
 
     def get_name_prompt(self, func_def: str, prompt: str) -> str:
-
         return f"""Functions:
 {func_def}
 
@@ -104,22 +120,33 @@ User:
 Answer:
 """
 
-    def get_param_prompt(self, function_name: str, param_name: str,
+    def get_param_prompt(self, func_def: str,
+                         function_name: str, param_name: str,
                          param_type: str, prompt: str,
                          parameters: dict[str, Any],) -> str:
-        
-        # Build context of already extracted parameters WITHOUT quotes.
-        # If we use quotes here, the model will output quotes for the next param.
         params_context = ""
         if parameters:
-            for k, v in parameters.items():
-                params_context += f"{k}={v}, "
-        
-        # A hard, direct constraint placed immediately before the completion
-        constraint = f"Output ONLY the raw {param_type} for {param_name}. No quotes, no commas, no parentheses. Stop immediately."
-        
-        return f"""User Request: {prompt}
-{constraint}
+            for key, value in parameters.items():
+                params_context += (
+                    f"\"{key}\": {json.dumps(value)},\n            "
+                )
 
-{function_name}({params_context}{param_name}="""
+        if param_type in {"int", "integer", "float", "number"}:
+            value_prefix = ""
+        elif param_type in {"bool", "boolean"}:
+            value_prefix = ""
+        else:
+            value_prefix = '"'
 
+        return f"""Available functions:
+{func_def}
+
+User prompt: {prompt}
+
+Extract the '{param_name}' parameter for the function \
+'{function_name}' and complete the JSON:
+{{
+        \"prompt\": {json.dumps(prompt)},
+        \"name\": \"{function_name}\",
+        \"parameters\": {{
+            {params_context}\"{param_name}\": {value_prefix}"""

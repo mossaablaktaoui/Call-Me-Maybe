@@ -10,7 +10,6 @@ class LLM_Model(Small_LLM_Model):
         self.merges = self.set_merges()
         self.vocab = self.set_vocab()
         self.inverse_vocab = {value: key for key, value in self.vocab.items()}
-        self._tokenize_cache: dict[str, List[str]] = {}
 
     def set_vocab(self) -> dict[str, int]:
         with open(self.get_path_to_vocab_file(), "r") as file:
@@ -35,13 +34,8 @@ class LLM_Model(Small_LLM_Model):
         return merges
 
     def tokenize(self, text: str) -> List[str]:
-        if text in self._tokenize_cache:
-            return self._tokenize_cache[text]
-
-        text_replaced = (text.replace(" ", "Ġ")
-                             .replace("\n", "Ċ")
-                             .replace("\t", "ĉ"))
-        tokens = [char for char in text_replaced]
+        text = text.replace(" ", "Ġ").replace("\n", "Ċ").replace("\t", "ĉ")
+        tokens = [char for char in text]
 
         while True:
             pair_to_merge = self.get_pair_to_merge(tokens)
@@ -65,11 +59,12 @@ class LLM_Model(Small_LLM_Model):
 
             tokens = new_tokens
 
-        self._tokenize_cache[text] = tokens
         return tokens
 
-    def get_pair_to_merge(self,
-                          tokens: List[str],) -> Optional[Tuple[str, str]]:
+    def get_pair_to_merge(
+        self,
+        tokens: List[str],
+    ) -> Optional[Tuple[str, str]]:
         pairs = []
 
         for index in range(len(tokens) - 1):
@@ -90,13 +85,21 @@ class LLM_Model(Small_LLM_Model):
 
     def encode(self, text: str) -> List[int]:
         tokens = self.tokenize(text)
-        return [self.vocab[token] for token in tokens]
+        token_ids = []
+
+        for token in tokens:
+            token_ids.append(self.vocab[token])
+
+        return token_ids
 
     def decode(self, tokens_ids: List[int]) -> str:
         tokens = []
 
         for token_id in tokens_ids:
-            tokens.append(self.inverse_vocab[token_id])
+            for vocab_token, vocab_token_id in self.vocab.items():
+                if vocab_token_id == token_id:
+                    tokens.append(vocab_token)
+                    break
 
         text = "".join(tokens)
         text = text.replace("Ġ", " ").replace("Ċ", "\n").replace("ĉ", "\t")

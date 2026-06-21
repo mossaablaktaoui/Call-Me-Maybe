@@ -1,64 +1,82 @@
-import tkinter as tk
-from tkinter import ttk
+from collections.abc import Callable
+from typing import Any
+import queue
 import threading
 import time
-import queue
-import json
+import tkinter as tk
+from tkinter import ttk
 
 
 class Visualizer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title("Token Generation Visualizer")
         self.root.geometry("800x600")
         self.root.minsize(700, 500)
 
-        self.event_queue = queue.Queue()
-        self.start_time = None
+        self.event_queue: queue.Queue[tuple[Any, ...]] = queue.Queue()
+        self.start_time: float | None = None
 
         self._build_ui()
 
-    def _build_ui(self):
-        # --- Top bar: timer + progress ---
+    def _build_ui(self) -> None:
         top_frame = ttk.Frame(self.root)
         top_frame.pack(fill="x", padx=10, pady=5)
 
         self.timer_label = ttk.Label(
-            top_frame, text="Time: 00:00.0", font=("Consolas", 14, "bold")
+            top_frame,
+            text="Time: 00:00.0",
+            font=("Consolas", 14, "bold"),
         )
         self.timer_label.pack(side="left")
 
         self.progress_label = ttk.Label(
-            top_frame, text="Prompt: -/-", font=("Consolas", 12)
+            top_frame,
+            text="Prompt: -/-",
+            font=("Consolas", 12),
         )
         self.progress_label.pack(side="right")
 
-        # --- Prompts List (Middle) ---
         prompt_frame = ttk.LabelFrame(self.root, text="Prompts")
         prompt_frame.pack(fill="both", padx=10, pady=5, expand=False)
 
-        # Configure grid for Text + Scrollbar
         prompt_grid = ttk.Frame(prompt_frame)
         prompt_grid.pack(fill="both", expand=True, padx=5, pady=5)
         prompt_grid.rowconfigure(0, weight=1)
         prompt_grid.columnconfigure(0, weight=1)
 
         self.prompt_text = tk.Text(
-            prompt_grid, height=6, wrap="word", state="disabled",
-            bg="#1e1e1e", fg="white", font=("Consolas", 10),
-            insertbackground="white", relief="flat"
+            prompt_grid,
+            height=6,
+            wrap="word",
+            state="disabled",
+            bg="#1e1e1e",
+            fg="white",
+            font=("Consolas", 10),
+            insertbackground="white",
+            relief="flat",
         )
-        prompt_scroll = ttk.Scrollbar(prompt_grid, orient="vertical", command=self.prompt_text.yview)
+        prompt_scroll = ttk.Scrollbar(
+            prompt_grid,
+            orient="vertical",
+            command=self.prompt_text.yview,
+        )
         self.prompt_text.configure(yscrollcommand=prompt_scroll.set)
-        
+
         self.prompt_text.grid(row=0, column=0, sticky="nsew")
         prompt_scroll.grid(row=0, column=1, sticky="ns")
 
-        # Tags for prompt highlighting
-        self.prompt_text.tag_configure("current", foreground="#4EC9B0", font=("Consolas", 10, "bold"))
-        self.prompt_text.tag_configure("old", foreground="white", font=("Consolas", 10))
+        self.prompt_text.tag_configure(
+            "current",
+            foreground="#4EC9B0",
+            font=("Consolas", 10, "bold"),
+        )
+        self.prompt_text.tag_configure(
+            "old",
+            foreground="white",
+            font=("Consolas", 10),
+        )
 
-        # --- Output Terminal (Bottom) ---
         output_frame = ttk.LabelFrame(self.root, text="Output")
         output_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
@@ -68,24 +86,37 @@ class Visualizer:
         output_grid.columnconfigure(0, weight=1)
 
         self.output_text = tk.Text(
-            output_grid, wrap="word", font=("Consolas", 11),
-            state="disabled", bg="#1e1e1e", fg="#d4d4d4",
-            insertbackground="white", relief="flat"
+            output_grid,
+            wrap="word",
+            font=("Consolas", 11),
+            state="disabled",
+            bg="#1e1e1e",
+            fg="#d4d4d4",
+            insertbackground="white",
+            relief="flat",
         )
-        output_scroll = ttk.Scrollbar(output_grid, orient="vertical", command=self.output_text.yview)
+        output_scroll = ttk.Scrollbar(
+            output_grid,
+            orient="vertical",
+            command=self.output_text.yview,
+        )
         self.output_text.configure(yscrollcommand=output_scroll.set)
-        
+
         self.output_text.grid(row=0, column=0, sticky="nsew")
         output_scroll.grid(row=0, column=1, sticky="ns")
 
-        # Tags for output formatting
-        self.output_text.tag_configure("title", foreground="#569CD6", font=("Consolas", 11, "bold"))
-        self.output_text.tag_configure("error", foreground="#F44747", font=("Consolas", 11, "bold"))
+        self.output_text.tag_configure(
+            "title",
+            foreground="#569CD6",
+            font=("Consolas", 11, "bold"),
+        )
+        self.output_text.tag_configure(
+            "error",
+            foreground="#F44747",
+            font=("Consolas", 11, "bold"),
+        )
 
-    # ------------------------------------------------------------------
-    # Event processing (runs on the main tkinter thread via root.after)
-    # ------------------------------------------------------------------
-    def _process_events(self):
+    def _process_events(self) -> None:
         try:
             while True:
                 event = self.event_queue.get_nowait()
@@ -102,7 +133,11 @@ class Visualizer:
                     self.prompt_text.see("end")
 
                     self.output_text.config(state="normal")
-                    self.output_text.insert("end", "Model Generation:\n", "title")
+                    self.output_text.insert(
+                        "end",
+                        "Model Generation:\n",
+                        "title",
+                    )
                     self.output_text.config(state="disabled")
                     self.output_text.see("end")
 
@@ -124,8 +159,16 @@ class Visualizer:
                 elif event_type == "validation_error":
                     _, error_msg = event
                     self.output_text.config(state="normal")
-                    self.output_text.insert("end", f"\n[ERROR: {error_msg}]\n", "error")
-                    self.output_text.insert("end", "\nModel Generation:\n", "title")
+                    self.output_text.insert(
+                        "end",
+                        f"\n[ERROR: {error_msg}]\n",
+                        "error",
+                    )
+                    self.output_text.insert(
+                        "end",
+                        "\nModel Generation:\n",
+                        "title",
+                    )
                     self.output_text.config(state="disabled")
                     self.output_text.see("end")
 
@@ -135,7 +178,7 @@ class Visualizer:
                         mins = int(elapsed // 60)
                         secs = elapsed % 60
                         self.timer_label.config(
-                            text=f"Time: {mins:02d}:{secs:04.1f} (Done)"
+                            text=f"Time: {mins:02d}:{secs:04.1f} (Done)",
                         )
                     self.progress_label.config(text="All prompts completed")
                     self.start_time = None
@@ -143,7 +186,6 @@ class Visualizer:
         except queue.Empty:
             pass
 
-        # keep the timer ticking
         if self.start_time:
             elapsed = time.time() - self.start_time
             mins = int(elapsed // 60)
@@ -152,33 +194,27 @@ class Visualizer:
 
         self.root.after(50, self._process_events)
 
-    # ------------------------------------------------------------------
-    # Public API – called from the builder thread
-    # ------------------------------------------------------------------
-    def notify_new_prompt(self, prompt: str, index: int, total: int):
+    def notify_new_prompt(self, prompt: str, index: int, total: int) -> None:
         self.event_queue.put(("new_prompt", prompt, index, total))
 
-    def notify_new_token(self, token: str):
+    def notify_new_token(self, token: str) -> None:
         self.event_queue.put(("new_token", token))
 
-    def notify_result(self, formatted_json: str):
+    def notify_result(self, formatted_json: str) -> None:
         self.event_queue.put(("result", formatted_json))
 
-    def notify_validation_error(self, error_msg: str):
+    def notify_validation_error(self, error_msg: str) -> None:
         self.event_queue.put(("validation_error", error_msg))
 
-    def notify_complete(self):
+    def notify_complete(self) -> None:
         self.event_queue.put(("complete",))
 
-    # ------------------------------------------------------------------
-    # Entry point
-    # ------------------------------------------------------------------
-    def run(self, build_fn):
-        """Start the GUI and run *build_fn* in a background thread."""
+    def run(self, build_fn: Callable[[], None]) -> None:
+        """Start the GUI and run build_fn in a background thread."""
         self.start_time = time.time()
         self._process_events()
 
-        def _safe_run():
+        def _safe_run() -> None:
             build_fn()
 
         thread = threading.Thread(target=_safe_run, daemon=True)

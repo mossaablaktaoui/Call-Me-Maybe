@@ -1,14 +1,12 @@
 from src.builder import Builder
-from src.visualizer import Visualizer
 
 
-def main():
+def main() -> None:
     try:
-        builder = Builder()
-    except Exception as e:
-        print(e)
+        Builder()
+    except Exception as error:
+        print(error)
 
 
 if __name__ == "__main__":
     main()
-
