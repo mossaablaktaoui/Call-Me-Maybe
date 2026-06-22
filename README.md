@@ -45,11 +45,10 @@ The terminal visualizer streams generated tokens directly in the console and pri
 uv run python -m src --visualizer terminal
 ```
 
-Recommended screenshot to add later:
+<p align="center">
+  <img src="https://github.com/mossaablaktaoui/Assests/blob/main/terminal-visualizer.png?raw=true" width="60%" alt="Terminal visualizer demo">
+</p>
 
-```md
-![Terminal visualizer demo](assets/terminal-visualizer.png)
-```
 
 ### GUI Visualizer
 
@@ -65,11 +64,10 @@ The GUI visualizer opens a Tkinter window showing:
 uv run python -m src --visualizer gui
 ```
 
-Recommended screenshot to add later:
+<p align="center">
+  <img src="https://github.com/mossaablaktaoui/Assests/blob/main/Screenshot%20from%202026-06-22%2019-29-30.png?raw=true" width="60%" alt="Terminal visualizer demo">
+</p>
 
-```md
-![GUI visualizer demo](assets/gui-visualizer.png)
-```
 
 ## Project Structure
 
@@ -213,30 +211,5 @@ While building this project, I practiced and learned several important concepts:
 - **CLI design**: exposing model, input/output, and visualizer choices through command-line flags.
 - **Python project hygiene**: linting, type-checking, modular file organization, and reproducible dependency management with `uv`.
 
-## Limitations
 
-- Prompts are processed sequentially rather than batched.
-- Output quality depends heavily on the selected model.
-- Complex nested arguments are not the main target of this implementation.
-- Small models can still make incorrect semantic choices even when the output format is constrained.
-
-## Future Improvements
-
-- Add screenshots and GIFs for both visualizers.
-- Add a diagram explaining the constrained decoding pipeline.
-- Add automated tests for schema parsing and generated output validation.
-- Add batching support for faster processing.
-- Improve error recovery when generation produces invalid values.
-- Add support for more complex nested JSON schemas.
-
-## Suggested Images To Add Later
-
-- Terminal visualizer screenshot
-- GUI visualizer screenshot
-- Architecture diagram: input JSON → prompt builder → model → constrained decoder → output JSON
-- Token generation flow diagram
-- Example before/after image: natural-language prompt converted into a function call
-
-## License
-
-Add your preferred license here.
+<p align="right"><code>This project was completed in 22 June 2026.</code></p>
