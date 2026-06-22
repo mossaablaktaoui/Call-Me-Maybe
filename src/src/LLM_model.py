@@ -1,5 +1,5 @@
 import json
-from typing import Any, List, Optional, Tuple, cast
+from typing import List, Optional, Tuple
 
 from llm_sdk import Small_LLM_Model
 
@@ -14,9 +14,9 @@ class LLM_Model(Small_LLM_Model):
 
     def set_vocab(self) -> dict[str, int]:
         with open(self.get_path_to_vocab_file(), "r") as file:
-            data: Any = json.load(file)
+            data: dict[str, int] = json.load(file)
 
-        return cast(dict[str, int], data)
+        return data
 
     def set_merges(self) -> dict[tuple[str, str], int]:
         merges: dict[tuple[str, str], int] = {}
@@ -80,8 +80,7 @@ class LLM_Model(Small_LLM_Model):
 
         best_pair = min(
             pairs,
-            key=lambda pair: self.merges.get(pair, float("inf")),
-        )
+            key=lambda pair: self.merges.get(pair, float("inf")))
 
         if best_pair not in self.merges:
             return None

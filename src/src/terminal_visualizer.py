@@ -12,6 +12,7 @@ class Visualizer:
 
     def __init__(self) -> None:
         self.start_time: float | None = None
+        self.run()
 
     def notify_new_prompt(self, prompt: str, index: int, total: int) -> None:
         header = f"\n[{index}/{total}] Prompt"

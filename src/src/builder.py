@@ -1,26 +1,48 @@
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Protocol
 
 from src.decoder import Decoder
 from src.file_manager import FileManager
 from src.LLM_model import LLM_Model
-from src.visualterm import Visualizer
+from src.gui_visualizer import Visualizer as GuiVisualizer
+from src.terminal_visualizer import Visualizer as TerminalVisualizer
+
+
+class VisualizerProtocol(Protocol):
+    def notify_new_prompt(self, prompt: str, index: int, total: int) -> None:
+        pass
+
+    def notify_new_token(self, token: str) -> None:
+        pass
+
+    def notify_result(self, formatted_json: str) -> None:
+        pass
+
+    def notify_complete(self) -> None:
+        pass
 
 
 class Builder:
     def __init__(self) -> None:
         self.file_manager = FileManager()
+        self.visualizer: VisualizerProtocol
+        self.model: LLM_Model | None = None
+        self.decoder: Decoder | None = None
+
+        if self.file_manager.visualizer_type == "gui":
+            self.visualizer = GuiVisualizer()
+            self.visualizer.run(self.build)
+        else:
+            self.visualizer = TerminalVisualizer()
+            self.build()
+
+    def build(self) -> None:
         self.model = LLM_Model(self.file_manager.model_name)
-        self.visualizer = Visualizer()
         self.decoder = Decoder(
             file_manager=self.file_manager,
             model=self.model,
         )
 
-        self.visualizer.run()
-        self.build()
-
-    def build(self) -> None:
         results: list[dict[str, Any]] = []
         prompts = self.file_manager.get_prompts()
 
@@ -65,6 +87,9 @@ class Builder:
         }
 
     def generate_text(self, prompt: str, param_type: str | None = None) -> Any:
+        if self.model is None or self.decoder is None:
+            raise RuntimeError("Builder has not been initialized.")
+
         prompt_tokens_ids = self.model.encode(prompt)
         result = ""
 
@@ -92,8 +117,11 @@ class Builder:
 
         return self.cast_parameter_value(result, param_type)
 
-    def cast_parameter_value(self, value: str,
-                             param_type: str | None,) -> Any:
+    def cast_parameter_value(
+        self,
+        value: str,
+        param_type: str | None,
+    ) -> Any:
         value = value.strip()
 
         if param_type in {"int", "integer"}:
@@ -106,6 +134,8 @@ class Builder:
             return value.lower() in {"true", "yes", "1"}
 
         if param_type in {"string", "str"}:
+            if self.decoder is None:
+                raise RuntimeError("Builder has not been initialized.")
             return self.decoder.get_string_value(value)
 
         return value
@@ -120,15 +150,20 @@ User:
 Answer:
 """
 
-    def get_param_prompt(self, func_def: str,
-                         function_name: str, param_name: str,
-                         param_type: str, prompt: str,
-                         parameters: dict[str, Any],) -> str:
+    def get_param_prompt(
+        self,
+        func_def: str,
+        function_name: str,
+        param_name: str,
+        param_type: str,
+        prompt: str,
+        parameters: dict[str, Any],
+    ) -> str:
         params_context = ""
         if parameters:
             for key, value in parameters.items():
                 params_context += (
-                    f"\"{key}\": {json.dumps(value)},\n            "
+                    f'"{key}": {json.dumps(value)},\n            '
                 )
 
         if param_type in {"int", "integer", "float", "number"}:

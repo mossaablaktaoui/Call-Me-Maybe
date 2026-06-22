@@ -20,7 +20,7 @@ class Small_LLM_Model:
 
     def __init__(
         self,
-        model_name: str = "Qwen/Qwen3-1.7B",
+        model_name: str = "Qwen/Qwen3-0.6B",
         *,
         device: str | None = None,
         dtype: torch.dtype | None = None,

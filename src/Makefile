@@ -12,6 +12,7 @@ clean:
 	find . -type d -name ".mypy_cache" -prune -exec rm -rf {} +
 	find . -type d -name ".pytest_cache" -prune -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
+	rm -rf data/output
 
 lint:
 	flake8 .
@@ -19,4 +20,4 @@ lint:
 
 lint-strict:
 	flake8 .
-	mypy . --strict
+	mypy . --strict --ignore-missing-imports

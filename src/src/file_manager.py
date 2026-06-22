@@ -15,6 +15,7 @@ class FileManager:
         self.input = arguments[1]
         self.output = arguments[2]
         self.model_name = arguments[3]
+        self.visualizer_type = arguments[4]
         self.funcs_def = self.load_functions()
 
     def load_functions(self) -> list[dict[str, Any]]:
@@ -33,7 +34,7 @@ class FileManager:
         except json.JSONDecodeError:
             raise ValueError("Functions file is not valid JSON.")
 
-    def parse_argument(self) -> tuple[Path, Path, Path, str]:
+    def parse_argument(self) -> tuple[Path, Path, Path, str, str]:
         parser = argparse.ArgumentParser()
         parser.add_argument(
             "--functions_definition",
@@ -56,6 +57,12 @@ class FileManager:
             default="Qwen/Qwen3-0.6B",
             help="Hugging Face causal language model to use.",
         )
+        parser.add_argument(
+            "--visualizer",
+            type=str,
+            choices=("gui", "terminal"),
+            default="gui",
+        )
         args = parser.parse_args()
 
         func_path = Path(args.functions_definition)
@@ -77,11 +84,16 @@ class FileManager:
                 output_path.touch()
             except OSError as error:
                 raise ValueError(
-                    "Invalid output path or directory structure: "
-                    f"'{output_path}'",
+                    f"Invalid output path or directory structure: '{output_path}'",
                 ) from error
 
-        return (func_path, input_path, output_path, args.model)
+        return (
+            func_path,
+            input_path,
+            output_path,
+            args.model,
+            args.visualizer,
+        )
 
     def get_prompts(self) -> list[str]:
         try:
